@@ -79,6 +79,20 @@
   .coach-line{font-size:14px; line-height:1.5; margin-top:8px;}
   .coach-big{font-size:16px; font-weight:700;}
   .coach-ok{color:var(--volt);} .coach-warn{color:#ffd43b;} .coach-bad{color:var(--danger);}
+  /* workout plan */
+  .planday{background:var(--card2); border:1px solid var(--line); border-radius:12px;
+    padding:12px; margin-top:10px;}
+  .planday-head{display:flex; justify-content:space-between; align-items:center; gap:10px;}
+  .planday-name{font-weight:800; font-size:15px;}
+  .planday-tag{font-size:11px; color:var(--volt); font-weight:700; letter-spacing:1px; margin-top:2px;}
+  .planrows{margin-top:8px;}
+  .planrow{display:flex; justify-content:space-between; font-size:13.5px; padding:5px 2px;
+    border-bottom:1px solid var(--line);}
+  .planrow:last-child{border-bottom:none;}
+  .planrx{font-weight:800; color:var(--volt); font-variant-numeric:tabular-nums; white-space:nowrap; margin-left:10px;}
+  .plancardio{margin-top:8px; font-size:13px; color:var(--muted);}
+  .planrule{font-size:13px; color:var(--muted); line-height:1.55; margin-top:4px;}
+  .planrule b{color:var(--txt);}
   /* timer */
   .timerclock{font-size:64px; font-weight:900; text-align:center; letter-spacing:2px; margin:6px 0;
     font-variant-numeric:tabular-nums;}
@@ -140,6 +154,14 @@
   <div class="card" id="coachCard">
     <h2>🧠 Coach</h2>
     <div id="coach"></div>
+  </div>
+
+  <div class="card" id="planCard">
+    <h2>📋 Workout plan</h2>
+    <div class="planrule">4-day upper/lower split · 40 min lift + 20 min cardio per session.<br>
+      🔥 <b>Warm-up:</b> 5 min easy cardio + 2 warm-up sets on the first lift.<br>
+      📈 <b>Progression:</b> when you hit the top of the rep range on all sets, add 2.5–5 lbs next session.</div>
+    <div id="planList"></div>
   </div>
 
   <div class="card" id="timerCard">
@@ -250,6 +272,46 @@ const GROUPS = ['chest','back','legs','shoulders','arms','core'];
 const GROUP_LABEL = {chest:'Chest',back:'Back',legs:'Legs',shoulders:'Shoulders',arms:'Arms',core:'Core'};
 const CARDIO_TYPES = {treadmill:'🏃 Treadmill',bike:'🚴 Bike',elliptical:'〰️ Elliptical',rower:'🚣 Rower',stairmaster:'🪜 Stairmaster'};
 const PHASES = [{key:'lift',label:'Lift',secs:40*60},{key:'cardio',label:'Cardio',secs:20*60}];
+/* 4-day upper/lower split: compounds 5–8 reps, accessories 8–12. */
+const WORKOUT_PLAN=[
+  {day:'Day 1',title:'Lower Strength',tag:'LOWER · STRENGTH',
+   lifts:[
+     {n:'Back Squat',sets:4,reps:6,g:'legs'},
+     {n:'Romanian Deadlift',sets:3,reps:8,g:'legs'},
+     {n:'Leg Press',sets:3,reps:10,g:'legs'},
+     {n:'Hip Thrust',sets:3,reps:10,g:'legs'},
+     {n:'Standing Calf Raise',sets:3,reps:12,g:'legs'},
+     {n:'Plank',sets:3,reps:45,g:'core',unit:'s'}],
+   cardio:{type:'treadmill',minutes:20,note:'Incline walk'}},
+  {day:'Day 2',title:'Upper Push',tag:'PUSH · CHEST / SHOULDERS / TRICEPS',
+   lifts:[
+     {n:'Bench Press',sets:4,reps:6,g:'chest'},
+     {n:'Overhead Press',sets:3,reps:8,g:'shoulders'},
+     {n:'Incline Dumbbell Press',sets:3,reps:10,g:'chest'},
+     {n:'Lateral Raise',sets:3,reps:12,g:'shoulders'},
+     {n:'Tricep Pushdown',sets:3,reps:12,g:'arms'},
+     {n:'Overhead Tricep Extension',sets:2,reps:12,g:'arms'}],
+   cardio:{type:'bike',minutes:20,note:'Intervals — 1 min hard / 2 min easy'}},
+  {day:'Day 3',title:'Lower Power',tag:'LOWER · POWER',
+   lifts:[
+     {n:'Deadlift',sets:4,reps:5,g:'back'},
+     {n:'Front Squat / Goblet Squat',sets:3,reps:8,g:'legs'},
+     {n:'Walking Lunge',sets:3,reps:10,g:'legs',unit:'/leg'},
+     {n:'Seated Leg Curl',sets:3,reps:10,g:'legs'},
+     {n:'Hanging Knee Raise',sets:3,reps:12,g:'core'}],
+   cardio:{type:'rower',minutes:20,note:'Steady pace'}},
+  {day:'Day 4',title:'Upper Pull',tag:'PULL · BACK / BICEPS',
+   lifts:[
+     {n:'Bent-Over Row',sets:4,reps:8,g:'back'},
+     {n:'Lat Pulldown',sets:3,reps:10,g:'back'},
+     {n:'Seated Cable Row',sets:3,reps:10,g:'back'},
+     {n:'Dumbbell Curl',sets:3,reps:12,g:'arms'},
+     {n:'Face Pull',sets:3,reps:15,g:'shoulders'},
+     {n:'Hammer Curl',sets:2,reps:12,g:'arms'}],
+   cardio:{type:'elliptical',minutes:20,note:'Steady pace'}}
+];
+/** Muscle group -> plan day indices (0-based into WORKOUT_PLAN). */
+const PLAN_DAY_FOR_GROUP={legs:[0,2],chest:[1],shoulders:[1],arms:[3],back:[3],core:[0]};
 const F = 'system-ui,-apple-system,sans-serif';
 
 /* ================= helpers ================= */
@@ -277,12 +339,12 @@ function migrateData(raw){
   if(!d || !Array.isArray(d.entries)) d = null;
   if(!d){
     return {
-      v:2,
+      v:3,
       entries:[],
       weights:[],
       name:'Pat',
       settings:{weeklyGoal:4, weightGoal:125, startWeight:135},
-      display:{coach:true,timer:true,log:true,volume:true,prs:true,weight:true,history:true}
+      display:{coach:true,plan:true,timer:true,log:true,volume:true,prs:true,weight:true,history:true}
     };
   }
   // v1 -> v2: add display toggles, weight goal settings, name
@@ -292,6 +354,11 @@ function migrateData(raw){
     d.settings = Object.assign({weeklyGoal:4, weightGoal:125, startWeight:135}, d.settings||{});
     if(typeof d.name!=='string') d.name='Pat';
     d.v = 2;
+  }
+  // v2 -> v3: add workout-plan display toggle
+  if(d.v < 3){
+    d.display = Object.assign({plan:true}, d.display||{});
+    d.v = 3;
   }
   return d;
 }
@@ -426,6 +493,32 @@ function coachAdvice(entries, weights, settings, nowStr){
   };
 }
 
+/** Convert a plan day into prefill rows for the log form (weight left blank). */
+function planDayToFormRows(day){
+  return {
+    lifts:day.lifts.map(l=>({
+      name:l.n, group:l.g, sets:l.sets, reps:l.reps, weight:'',
+      _custom:!EXERCISES.some(e=>e.n===l.n)
+    })),
+    cardio:[{type:day.cardio.type, minutes:day.cardio.minutes, distance:0}]
+  };
+}
+/**
+ * Which plan day to suggest for a lagging muscle group (index into WORKOUT_PLAN).
+ * Leg days pick the least-recently-done of Day 1 / Day 3 (tracked via session.planDay).
+ */
+function suggestPlanDay(entries, group){
+  const days=PLAN_DAY_FOR_GROUP[group]||[0];
+  if(days.length===1) return days[0];
+  const last={};
+  for(const e of sortedSessions(entries)){
+    if(typeof e.planDay==='number') last[e.planDay]=e.date;
+  }
+  let best=days[0], bestDate=last[days[0]]||'';
+  for(const d of days){ const dt=last[d]||''; if(dt<bestDate){ best=d; bestDate=dt; } }
+  return best;
+}
+
 /* ================= 60-min timer (pure state machine) ================= */
 function makeTimer(){ return {idx:0, remaining:PHASES[0].secs, running:false, done:false}; }
 function timerStart(t){ if(!t.done) t.running=true; }
@@ -450,7 +543,7 @@ if (typeof process!=='undefined' && process.versions && process.versions.node){
     volumeByWeek, muscleVolumes, streakFor, sessionsInWeek, weekStartOf, weightTrend,
     laggingGroup, coachAdvice,
     makeTimer, timerStart, timerPause, timerReset, timerSwitch, timerTick, fmtClock,
-    PHASES, GROUPS, EXERCISES, migrateData
+    PHASES, GROUPS, EXERCISES, WORKOUT_PLAN, planDayToFormRows, suggestPlanDay, migrateData
   };
 }
 
@@ -480,16 +573,17 @@ function confetti(){
 
 /* ================= render ================= */
 let editingId=null;
-const DISPLAY_OPTS=[['coach','Coach card'],['timer','60-min timer'],['log','Log session form'],
+let loadedPlanDay=null; // plan day index pre-filled into the form via "Load this workout"
+const DISPLAY_OPTS=[['coach','Coach card'],['plan','Workout plan'],['timer','60-min timer'],['log','Log session form'],
   ['volume','Volume card'],['prs','Personal records'],['weight','Weight card'],['history','History']];
 
 function render(){
-  renderCoach(); renderTimerUI(); renderVolume(); renderPRs(); renderWeight();
+  renderCoach(); renderPlan(); renderTimerUI(); renderVolume(); renderPRs(); renderWeight();
   renderEntries(); renderDisplayToggles(); applyDisplay(); renderNudge();
 }
 function applyDisplay(){
   const d=store.data.display||{};
-  const map={coach:'#coachCard',timer:'#timerCard',log:'#logCard',volume:'#volumeCard',
+  const map={coach:'#coachCard',plan:'#planCard',timer:'#timerCard',log:'#logCard',volume:'#volumeCard',
     prs:'#prCard',weight:'#weightCard',history:'#historyCard'};
   for(const k of Object.keys(map)){
     const el=$(map[k]); if(el) el.style.display = d[k]===false ? 'none' : '';
@@ -532,7 +626,12 @@ function renderCoach(){
     const cls=d>=0?'coach-ok':(d>=-15?'coach-warn':'coach-bad');
     lines.push(`<div class="coach-line">Volume: <b>${a.weekVol.toLocaleString()} lb</b> this week vs <b>${a.lastVol.toLocaleString()} lb</b> last week (<span class="${cls}">${d>=0?'+':''}${d}%</span>).</div>`);
   }
-  if(a.lagging)
+  if(a.lagging && store.data.display.plan!==false){
+    const pd=suggestPlanDay(store.data.entries, a.lagging);
+    const day=WORKOUT_PLAN[pd];
+    lines.push(`<div class="coach-line">Next session: <b>${esc(day.day)} — ${esc(day.title)}</b> — ${GROUP_LABEL[a.lagging]} is ${a.lagWhy==='behind pace'?'falling behind its usual pace':'your least-trained group lately'}. Hit "Load this workout" in the plan to pre-fill your log.</div>`);
+  }
+  else if(a.lagging)
     lines.push(`<div class="coach-line">Next session suggestion: hit <b>${GROUP_LABEL[a.lagging]}</b>${a.lagWhy==='behind pace'?' — it\'s falling behind its usual pace':' — it\'s your least-trained group lately'}.</div>`);
   else if(a.sessions===0)
     lines.push(`<div class="coach-line">Next session suggestion: full-body — squat, bench, row + 20 min cardio. Keep it simple, train hard.</div>`);
@@ -545,6 +644,24 @@ function renderCoach(){
   }
   lines.push(`<div class="coach-line" style="color:var(--muted);font-size:13px">Session structure: 40:00 lifting + 20:00 cardio. Use the timer below.</div>`);
   box.innerHTML=lines.join('');
+}
+function renderPlan(){
+  const el=$('#planList'); if(!el) return;
+  el.innerHTML=WORKOUT_PLAN.map((d,i)=>{
+    const rows=d.lifts.map(l=>
+      `<div class="planrow"><span>${esc(l.n)}</span><span class="planrx">${l.sets}×${l.reps}${l.unit?esc(l.unit):''}</span></div>`
+    ).join('');
+    return `<div class="planday">
+      <div class="planday-head">
+        <div><div class="planday-name">${esc(d.day)} — ${esc(d.title)}</div>
+        <div class="planday-tag">${esc(d.tag)}</div></div>
+        <button type="button" class="btn small" data-plan="${i}">Load this workout</button>
+      </div>
+      <div class="planrows">${rows}</div>
+      <div class="plancardio">🏃 Cardio: ${esc(d.cardio.note)} · ${d.cardio.minutes} min</div>
+    </div>`;
+  }).join('');
+  el.querySelectorAll('[data-plan]').forEach(b=>b.onclick=()=>loadPlanDay(parseInt(b.dataset.plan,10)));
 }
 function renderVolume(){
   const monday=weekStartOf(todayStr());
@@ -702,6 +819,18 @@ function readCardioRow(div){
   return {type:div.querySelector('.cr-type').value, minutes,
     distance:parseFloat(div.querySelector('.cr-dist').value)||0};
 }
+/** Pre-fill the log form from a plan day (reuses the row builders; weight left blank). */
+function loadPlanDay(i){
+  const day=WORKOUT_PLAN[i]; if(!day) return;
+  cancelEdit();
+  loadedPlanDay=i;
+  const rows=planDayToFormRows(day);
+  $('#liftRows').innerHTML=''; $('#cardioRows').innerHTML='';
+  rows.lifts.forEach(l=>addLiftRow(l));
+  rows.cardio.forEach(c=>addCardioRow(c));
+  toast(day.day+' loaded — fill in your weights 💪');
+  const lc=$('#logCard'); if(lc&&lc.scrollIntoView) lc.scrollIntoView({behavior:'smooth'});
+}
 function startEdit(id){
   const s=store.data.entries.find(x=>x.id===id); if(!s) return;
   editingId=id;
@@ -717,6 +846,7 @@ function startEdit(id){
 }
 function cancelEdit(){
   editingId=null;
+  loadedPlanDay=null;
   $('#fDate').value=todayStr();
   $('#liftRows').innerHTML=''; $('#cardioRows').innerHTML='';
   addLiftRow();
@@ -737,6 +867,7 @@ function submitForm(){
     store.save(); render(); cancelEdit(); toast('Session updated');
   } else {
     const s={id:uid(), date, lifts, cardio};
+    if(loadedPlanDay!=null) s.planDay=loadedPlanDay;
     const {prs}=detectPRs([...store.data.entries, s]);
     const newPRs=prs.filter(p=>p.sessionId===s.id);
     store.data.entries.push(s); store.save(); render(); cancelEdit();
