@@ -93,6 +93,15 @@
   .plancardio{margin-top:8px; font-size:13px; color:var(--muted);}
   .planrule{font-size:13px; color:var(--muted); line-height:1.55; margin-top:4px;}
   .planrule b{color:var(--txt);}
+  .swapbtn{background:transparent; border:1px solid var(--line); color:var(--muted); border-radius:8px;
+    font-size:14px; padding:2px 9px; cursor:pointer; font-family:inherit; flex:none;}
+  .swapbtn.on{border-color:var(--volt); color:var(--volt);}
+  .swapmark{color:var(--volt); font-size:11px; font-weight:800; letter-spacing:.5px;}
+  .swapopt{display:flex; justify-content:space-between; align-items:center; width:100%; text-align:left;
+    background:var(--card2); border:1px solid var(--line); color:var(--txt); border-radius:12px;
+    padding:12px 14px; margin-top:8px; font-size:14.5px; font-weight:600; cursor:pointer; font-family:inherit;}
+  .swapopt.sel{border-color:var(--volt);}
+  .swapopt .def{font-size:10.5px; color:var(--muted); font-weight:800; letter-spacing:1px;}
   /* timer */
   .timerclock{font-size:64px; font-weight:900; text-align:center; letter-spacing:2px; margin:6px 0;
     font-variant-numeric:tabular-nums;}
@@ -258,6 +267,17 @@
   </div>
 </div>
 
+<div class="modal" id="swapModal">
+  <div class="sheet">
+    <h2 id="swapTitle">Swap exercise</h2>
+    <div class="pct" style="margin-bottom:4px">Pick an equivalent — same muscles, different move.</div>
+    <div id="swapOpts"></div>
+    <div class="setrow">
+      <button class="btn ghost" id="swapClose">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
 'use strict';
 /* ================= constants ================= */
@@ -276,38 +296,38 @@ const PHASES = [{key:'lift',label:'Lift',secs:40*60},{key:'cardio',label:'Cardio
 const WORKOUT_PLAN=[
   {day:'Day 1',title:'Lower Strength',tag:'LOWER · STRENGTH',
    lifts:[
-     {n:'Back Squat',sets:4,reps:6,g:'legs'},
-     {n:'Romanian Deadlift',sets:3,reps:8,g:'legs'},
-     {n:'Leg Press',sets:3,reps:10,g:'legs'},
-     {n:'Hip Thrust',sets:3,reps:10,g:'legs'},
-     {n:'Standing Calf Raise',sets:3,reps:12,g:'legs'},
-     {n:'Plank',sets:3,reps:45,g:'core',unit:'s'}],
+     {n:'Back Squat',sets:4,reps:6,g:'legs',alts:['Front Squat','Goblet Squat','Leg Press']},
+     {n:'Romanian Deadlift',sets:3,reps:8,g:'legs',alts:['Dumbbell Romanian Deadlift','Good Morning','Cable Pull-Through']},
+     {n:'Leg Press',sets:3,reps:10,g:'legs',alts:['Hack Squat','Belt Squat','Goblet Squat']},
+     {n:'Hip Thrust',sets:3,reps:10,g:'legs',alts:['Glute Bridge','Kettlebell Swing','Cable Pull-Through']},
+     {n:'Standing Calf Raise',sets:3,reps:12,g:'legs',alts:['Seated Calf Raise','Leg Press Calf Press']},
+     {n:'Plank',sets:3,reps:45,g:'core',unit:'s',alts:['Dead Bug','Ab Wheel Rollout','Side Plank']}],
    cardio:{type:'treadmill',minutes:20,note:'Incline walk'}},
   {day:'Day 2',title:'Upper Push',tag:'PUSH · CHEST / SHOULDERS / TRICEPS',
    lifts:[
-     {n:'Bench Press',sets:4,reps:6,g:'chest'},
-     {n:'Overhead Press',sets:3,reps:8,g:'shoulders'},
-     {n:'Incline Dumbbell Press',sets:3,reps:10,g:'chest'},
-     {n:'Lateral Raise',sets:3,reps:12,g:'shoulders'},
-     {n:'Tricep Pushdown',sets:3,reps:12,g:'arms'},
-     {n:'Overhead Tricep Extension',sets:2,reps:12,g:'arms'}],
+     {n:'Bench Press',sets:4,reps:6,g:'chest',alts:['Dumbbell Bench Press','Incline Barbell Press','Weighted Push-Up']},
+     {n:'Overhead Press',sets:3,reps:8,g:'shoulders',alts:['Dumbbell Shoulder Press','Arnold Press','Machine Shoulder Press']},
+     {n:'Incline Dumbbell Press',sets:3,reps:10,g:'chest',alts:['Incline Barbell Press','Landmine Press','Chest Dip']},
+     {n:'Lateral Raise',sets:3,reps:12,g:'shoulders',alts:['Cable Lateral Raise','Machine Lateral Raise']},
+     {n:'Tricep Pushdown',sets:3,reps:12,g:'arms',alts:['Overhead Rope Extension','Skull Crusher']},
+     {n:'Overhead Tricep Extension',sets:2,reps:12,g:'arms',alts:['Skull Crusher','Diamond Push-Up','Cable Overhead Extension']}],
    cardio:{type:'bike',minutes:20,note:'Intervals — 1 min hard / 2 min easy'}},
   {day:'Day 3',title:'Lower Power',tag:'LOWER · POWER',
    lifts:[
-     {n:'Deadlift',sets:4,reps:5,g:'back'},
-     {n:'Front Squat / Goblet Squat',sets:3,reps:8,g:'legs'},
-     {n:'Walking Lunge',sets:3,reps:10,g:'legs',unit:'/leg'},
-     {n:'Seated Leg Curl',sets:3,reps:10,g:'legs'},
-     {n:'Hanging Knee Raise',sets:3,reps:12,g:'core'}],
+     {n:'Deadlift',sets:4,reps:5,g:'back',alts:['Trap Bar Deadlift','Rack Pull']},
+     {n:'Front Squat / Goblet Squat',sets:3,reps:8,g:'legs',alts:['Leg Press','Hack Squat','Goblet Squat']},
+     {n:'Walking Lunge',sets:3,reps:10,g:'legs',unit:'/leg',alts:['Bulgarian Split Squat','Step-Up','Reverse Lunge']},
+     {n:'Seated Leg Curl',sets:3,reps:10,g:'legs',alts:['Lying Leg Curl','Swiss Ball Leg Curl']},
+     {n:'Hanging Knee Raise',sets:3,reps:12,g:'core',alts:["Captain's Chair Leg Raise",'Cable Crunch']}],
    cardio:{type:'rower',minutes:20,note:'Steady pace'}},
   {day:'Day 4',title:'Upper Pull',tag:'PULL · BACK / BICEPS',
    lifts:[
-     {n:'Bent-Over Row',sets:4,reps:8,g:'back'},
-     {n:'Lat Pulldown',sets:3,reps:10,g:'back'},
-     {n:'Seated Cable Row',sets:3,reps:10,g:'back'},
-     {n:'Dumbbell Curl',sets:3,reps:12,g:'arms'},
-     {n:'Face Pull',sets:3,reps:15,g:'shoulders'},
-     {n:'Hammer Curl',sets:2,reps:12,g:'arms'}],
+     {n:'Bent-Over Row',sets:4,reps:8,g:'back',alts:['Chest-Supported Row','T-Bar Row','One-Arm Dumbbell Row']},
+     {n:'Lat Pulldown',sets:3,reps:10,g:'back',alts:['Assisted Pull-Up','Straight-Arm Pulldown']},
+     {n:'Seated Cable Row',sets:3,reps:10,g:'back',alts:['Chest-Supported Row','One-Arm Dumbbell Row']},
+     {n:'Dumbbell Curl',sets:3,reps:12,g:'arms',alts:['EZ-Bar Curl','Cable Curl']},
+     {n:'Face Pull',sets:3,reps:15,g:'shoulders',alts:['Rear Delt Fly','Band Pull-Apart']},
+     {n:'Hammer Curl',sets:2,reps:12,g:'arms',alts:['Rope Hammer Curl','Cross-Body Dumbbell Curl']}],
    cardio:{type:'elliptical',minutes:20,note:'Steady pace'}}
 ];
 /** Muscle group -> plan day indices (0-based into WORKOUT_PLAN). */
@@ -339,12 +359,13 @@ function migrateData(raw){
   if(!d || !Array.isArray(d.entries)) d = null;
   if(!d){
     return {
-      v:3,
+      v:4,
       entries:[],
       weights:[],
       name:'Pat',
       settings:{weeklyGoal:4, weightGoal:125, startWeight:135},
-      display:{coach:true,plan:true,timer:true,log:true,volume:true,prs:true,weight:true,history:true}
+      display:{coach:true,plan:true,timer:true,log:true,volume:true,prs:true,weight:true,history:true},
+      swaps:{}
     };
   }
   // v1 -> v2: add display toggles, weight goal settings, name
@@ -359,6 +380,11 @@ function migrateData(raw){
   if(d.v < 3){
     d.display = Object.assign({plan:true}, d.display||{});
     d.v = 3;
+  }
+  // v3 -> v4: exercise swaps for the workout plan (keyed "dayIdx:liftIdx")
+  if(d.v < 4){
+    if(!d.swaps || typeof d.swaps!=='object' || Array.isArray(d.swaps)) d.swaps={};
+    d.v = 4;
   }
   return d;
 }
@@ -493,13 +519,50 @@ function coachAdvice(entries, weights, settings, nowStr){
   };
 }
 
-/** Convert a plan day into prefill rows for the log form (weight left blank). */
-function planDayToFormRows(day){
+/** Swap key for the workout plan: "dayIdx:liftIdx". */
+function swapKey(di,li){ return di+':'+li; }
+/**
+ * Curated picker options for a plan exercise: the original first, then its
+ * alts, deduped. Never the full exercise library — only true equivalents.
+ */
+function planAltList(day, liftIdx){
+  const l=day.lifts[liftIdx]; if(!l) return [];
+  const seen=new Set([l.n]); const out=[l.n];
+  for(const a of (l.alts||[])){
+    if(typeof a==='string' && a && !seen.has(a)){ seen.add(a); out.push(a); }
+  }
+  return out;
+}
+/** Selected swap name for a plan exercise, or null when the original stands. */
+function getPlanSwap(swaps, di, li){
+  const v=(swaps||{})[swapKey(di,li)];
+  return (typeof v==='string' && v) ? v : null;
+}
+/**
+ * Pure swap update: returns a new swaps map. Passing a falsy name (or the
+ * original name) removes the swap (reset).
+ */
+function setPlanSwap(swaps, di, li, name, origName){
+  const s=Object.assign({}, swaps||{});
+  if(!name || name===origName) delete s[swapKey(di,li)];
+  else s[swapKey(di,li)]=name;
+  return s;
+}
+/** Convert a plan day into prefill rows for the log form (weight left blank).
+ *  `swaps` is optional: {liftIdx: selectedName} for the day.
+ *  A swapped name keeps the original's muscle group (same muscles by design);
+ *  if it matches a library exercise, the library's group wins. */
+function planDayToFormRows(day, swaps){
+  swaps=swaps||{};
   return {
-    lifts:day.lifts.map(l=>({
-      name:l.n, group:l.g, sets:l.sets, reps:l.reps, weight:'',
-      _custom:!EXERCISES.some(e=>e.n===l.n)
-    })),
+    lifts:day.lifts.map((l,j)=>{
+      const name=swaps[j]||l.n;
+      const lib=EXERCISES.find(e=>e.n===name);
+      return {
+        name, group: lib?lib.g:l.g, sets:l.sets, reps:l.reps, weight:'',
+        _custom:!lib
+      };
+    }),
     cardio:[{type:day.cardio.type, minutes:day.cardio.minutes, distance:0}]
   };
 }
@@ -543,7 +606,8 @@ if (typeof process!=='undefined' && process.versions && process.versions.node){
     volumeByWeek, muscleVolumes, streakFor, sessionsInWeek, weekStartOf, weightTrend,
     laggingGroup, coachAdvice,
     makeTimer, timerStart, timerPause, timerReset, timerSwitch, timerTick, fmtClock,
-    PHASES, GROUPS, EXERCISES, WORKOUT_PLAN, planDayToFormRows, suggestPlanDay, migrateData
+    PHASES, GROUPS, EXERCISES, WORKOUT_PLAN, planDayToFormRows, suggestPlanDay, migrateData,
+    swapKey, planAltList, getPlanSwap, setPlanSwap
   };
 }
 
@@ -647,10 +711,15 @@ function renderCoach(){
 }
 function renderPlan(){
   const el=$('#planList'); if(!el) return;
+  const swaps=store.data.swaps||{};
   el.innerHTML=WORKOUT_PLAN.map((d,i)=>{
-    const rows=d.lifts.map(l=>
-      `<div class="planrow"><span>${esc(l.n)}</span><span class="planrx">${l.sets}×${l.reps}${l.unit?esc(l.unit):''}</span></div>`
-    ).join('');
+    const rows=d.lifts.map((l,j)=>{
+      const sel=getPlanSwap(swaps,i,j);
+      const disp=sel||l.n;
+      return `<div class="planrow"><span>${esc(disp)}${sel?'<span class="swapmark"> · SWAPPED</span>':''}</span>
+        <span class="row" style="gap:6px"><span class="planrx">${l.sets}×${l.reps}${l.unit?esc(l.unit):''}</span>
+        <button type="button" class="swapbtn${sel?' on':''}" data-swap="${i}:${j}" aria-label="Swap ${esc(disp)} for an equivalent">⇄</button></span></div>`;
+    }).join('');
     return `<div class="planday">
       <div class="planday-head">
         <div><div class="planday-name">${esc(d.day)} — ${esc(d.title)}</div>
@@ -662,6 +731,42 @@ function renderPlan(){
     </div>`;
   }).join('');
   el.querySelectorAll('[data-plan]').forEach(b=>b.onclick=()=>loadPlanDay(parseInt(b.dataset.plan,10)));
+  el.querySelectorAll('[data-swap]').forEach(b=>b.onclick=()=>{
+    const [di,li]=b.dataset.swap.split(':').map(Number);
+    openSwapPicker(di,li);
+  });
+}
+/** Swap picker: bottom sheet listing ONLY this exercise's curated equivalents. */
+function openSwapPicker(di,li){
+  const day=WORKOUT_PLAN[di]; if(!day) return;
+  const l=day.lifts[li]; if(!l) return;
+  const opts=planAltList(day,li);
+  const cur=getPlanSwap(store.data.swaps,di,li);
+  $('#swapTitle').textContent='Swap · '+l.n;
+  const box=$('#swapOpts');
+  box.innerHTML=opts.map((name,k)=>
+    `<button type="button" class="swapopt${(cur||l.n)===name?' sel':''}" data-opt="${k}">
+       <span>${esc(name)}</span>${k===0?'<span class="def">DEFAULT</span>':''}
+     </button>`).join('');
+  box.querySelectorAll('[data-opt]').forEach(b=>b.onclick=()=>{
+    const name=opts[parseInt(b.dataset.opt,10)];
+    store.data.swaps=setPlanSwap(store.data.swaps,di,li,name,l.n);
+    store.save();
+    $('#swapModal').classList.remove('open');
+    renderPlan();
+    toast(name===l.n ? l.n+' restored' : 'Swapped to '+name+' ⇄');
+  });
+  $('#swapModal').classList.add('open');
+}
+/** Swaps for one plan day as {liftIdx: name}. */
+function daySwaps(dayIdx){
+  const out={}; const sw=store.data.swaps||{};
+  for(const k of Object.keys(sw)){
+    const parts=k.split(':'); if(parts.length!==2) continue;
+    const di=parseInt(parts[0],10), li=parseInt(parts[1],10);
+    if(di===dayIdx && getPlanSwap(sw,di,li)) out[li]=sw[k];
+  }
+  return out;
 }
 function renderVolume(){
   const monday=weekStartOf(todayStr());
@@ -824,7 +929,7 @@ function loadPlanDay(i){
   const day=WORKOUT_PLAN[i]; if(!day) return;
   cancelEdit();
   loadedPlanDay=i;
-  const rows=planDayToFormRows(day);
+  const rows=planDayToFormRows(day, daySwaps(i));
   $('#liftRows').innerHTML=''; $('#cardioRows').innerHTML='';
   rows.lifts.forEach(l=>addLiftRow(l));
   rows.cardio.forEach(c=>addCardioRow(c));
@@ -1104,6 +1209,8 @@ function init(){
     $('#settingsModal').classList.remove('open');
     render();
   };
+  $('#swapClose').onclick=()=>$('#swapModal').classList.remove('open');
+  $('#swapModal').onclick=e=>{ if(e.target.id==='swapModal') $('#swapModal').classList.remove('open'); };
   $('#settingsModal').onclick=e=>{ if(e.target.id==='settingsModal') $('#closeSettings').click(); };
   $('#wipeData').onclick=()=>{
     if(!confirm('Erase ALL training data? This cannot be undone.')) return;
