@@ -694,6 +694,21 @@ function tonnage(l){
   return s*r*w;
 }
 function sessionTonnage(s){ return ((s||{}).lifts||[]).reduce((a,l)=>a+tonnage(l),0); }
+/** Total reps in a session (sets x reps). Used when no weights were logged. */
+function sessionReps(s){ return ((s||{}).lifts||[]).reduce((a,l)=>a+((l&&l.sets>0&&l.reps>0)?l.sets*l.reps:0),0); }
+/** Share-card fallback: when there are no PRs yet, show the latest session's
+ *  best sets (up to 6) as {name, mid, right} rows. Pure. */
+function todayBests(entries){
+  const sorted=sortedSessions(entries);
+  const last=sorted[sorted.length-1];
+  const lifts=((last&&last.lifts)||[]).filter(l=>l&&l.sets>0&&l.reps>0).slice(0,6);
+  return lifts.map(l=>{
+    const w=+l.weight||0, e1=epley1RM(w,l.reps);
+    return {name:String(l.name||'').toUpperCase().slice(0,22),
+      mid:l.sets+'×'+l.reps+(w>0?' @ '+w+' lb':''),
+      right:(w>0&&e1>0)?fmt(e1)+' 1RM':(l.sets*l.reps)+' REPS'};
+  });
+}
 function sessionCardioMin(s){ return ((s||{}).cardio||[]).reduce((a,c)=>a+Math.max(0,Number(c.minutes)||0),0); }
 /** Epley estimated 1-rep max. */
 function epley1RM(weight,reps){
@@ -1236,7 +1251,8 @@ if (typeof process!=='undefined' && process.versions && process.versions.node){
     heatmapData, longestStreak, muscleSets, balanceFlags,
     CHALLENGES, challengeStatus,
     serializeBackup, sessionsToCSV, validateBackup,
-    nextTourIdx, tourRowPristine
+    nextTourIdx, tourRowPristine,
+    sessionReps, todayBests
   };
 }
 
@@ -1981,12 +1997,22 @@ function shareStory(){
   x.beginPath(); x.moveTo(300,462); x.lineTo(500,462); x.moveTo(580,462); x.lineTo(780,462); x.stroke();
   x.save(); x.translate(W/2,462); x.rotate(Math.PI/4);
   x.fillStyle='#e8a2b0'; x.fillRect(-11,-11,22,22); x.restore();
-  x.fillStyle='rgba(246,201,212,.85)'; x.font='600 31px '+F;
-  ssSpaced(x,'GET STRONGER · 60-MIN SESSIONS · DOWN 10 LB',W/2,522,5);
-  // stat trio
-  const wLine = wt.latest!=null ? fmt(wt.latest)+' LB' : '—';
+  x.fillStyle='rgba(246,201,212,.85)';
+  const downLb=Math.max(0,Math.round((s.startWeight||0)-(s.weightGoal||0)));
+  const tagTxt='GET STRONGER · 60-MIN SESSIONS · DOWN '+downLb+' LB';
+  let tagFs=31;
+  const tagW=()=>{ x.font='600 '+tagFs+'px '+F;
+    return [...tagTxt].reduce((t,ch)=>t+x.measureText(ch).width,0)+5*(tagTxt.length-1); };
+  while(tagW()>920 && tagFs>20) tagFs-=2;
+  x.font='600 '+tagFs+'px '+F;
+  ssSpaced(x,tagTxt,W/2,522,5);
+  // stat trio — fall back to reps when no weights were logged
+  const wkSessions=sessionsInWeek(store.data.entries, weekStartOf(todayStr()));
+  const weekReps=wkSessions.reduce((a,s2)=>a+sessionReps(s2),0);
+  const volStat=a.weekVol>0 ? [a.weekVol.toLocaleString()+' LB','VOLUME · WK']
+                            : [weekReps.toLocaleString(),'REPS · WK'];
   const stats=[
-    [a.weekVol.toLocaleString()+' LB','VOLUME · WK'],
+    volStat,
     [st>0?('🔥'+st):'—','DAY STREAK'],
     [a.sessions+'/'+a.goal,'SESSIONS']
   ];
@@ -2005,9 +2031,17 @@ function shareStory(){
     ? `WEIGHT ${fmt(s.startWeight)} → ${fmt(wt.latest)} · GOAL ${fmt(s.weightGoal)}`
     : `WEIGHT GOAL ${fmt(s.weightGoal)} LB`;
   ssSpaced(x,wTxt,W/2,748,4);
-  // PR panel (blush)
+  // PR panel (blush) — PRs when they exist, else today's session bests
   const {prs}=detectPRs(store.data.entries);
   const recent=prs.slice(-6).reverse();
+  let panelTitle='RECENT PERSONAL RECORDS', panelRows=null;
+  if(recent.length){
+    panelRows=recent.map(p=>({name:p.name.toUpperCase().slice(0,22),
+      mid:`${p.sets}×${p.reps} @ ${p.weight} lb`, right:fmt(p.e1)+' 1RM'}));
+  } else {
+    const bests=todayBests(store.data.entries);
+    if(bests.length){ panelTitle="TODAY'S SESSION"; panelRows=bests; }
+  }
   const panelTop=800, panelH=940;
   x.save();
   rr(x,96,panelTop,888,panelH,44);
@@ -2015,18 +2049,18 @@ function shareStory(){
   x.shadowColor='rgba(0,0,0,.5)'; x.shadowBlur=44; x.shadowOffsetY=16;
   x.fill(); x.restore();
   x.fillStyle='#a05a70'; x.font='800 30px '+F;
-  ssSpaced(x,'RECENT PERSONAL RECORDS',W/2,panelTop+46,6);
-  if(recent.length){
-    recent.forEach((p,i)=>{
+  ssSpaced(x,panelTitle,W/2,panelTop+46,6);
+  if(panelRows){
+    panelRows.forEach((r,i)=>{
       const y=panelTop+120+i*128;
       x.fillStyle='#4a1f2e'; x.font='800 34px '+F; x.textAlign='left';
-      x.fillText(p.name.toUpperCase().slice(0,22),140,y);
+      x.fillText(r.name,140,y);
       x.fillStyle='#a05a70'; x.font='600 27px '+F;
-      x.fillText(`${p.sets}×${p.reps} @ ${p.weight} lb`,140,y+40);
+      x.fillText(r.mid,140,y+40);
       x.fillStyle='#c97e92'; x.font='900 40px '+F; x.textAlign='right';
-      x.fillText(fmt(p.e1)+' 1RM',940,y+18);
+      x.fillText(r.right,940,y+18);
       x.textAlign='center';
-      if(i<recent.length-1){ x.strokeStyle='rgba(201,126,146,.25)'; x.lineWidth=1;
+      if(i<panelRows.length-1){ x.strokeStyle='rgba(201,126,146,.25)'; x.lineWidth=1;
         x.beginPath(); x.moveTo(140,y+66); x.lineTo(940,y+66); x.stroke(); }
     });
   } else {
