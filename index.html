@@ -424,6 +424,21 @@
   </div>
 </main>
 
+<div class="modal" id="storyModal">
+  <div class="sheet" style="text-align:center">
+    <h2>Your card</h2>
+    <img id="storyPreviewImg" alt="Workout story card" style="width:100%;border-radius:12px;border:1px solid var(--line);display:block">
+    <div class="row" style="margin-top:12px;flex-wrap:wrap">
+      <button type="button" class="btn" id="storyShareBtn" style="flex:1">Share</button>
+      <button type="button" class="btn ghost" id="storyRerollBtn" style="flex:1">Try another style</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button type="button" class="btn ghost" id="storyCloseBtn" style="flex:1">Close</button>
+    </div>
+    <div class="pct" style="margin-top:8px">Tap Share, then pick Instagram Stories in the list.</div>
+  </div>
+</div>
+
 <div class="modal" id="settingsModal">
   <div class="sheet">
     <h2>⚙️ Settings</h2>
@@ -1498,6 +1513,7 @@ async function renderStoryCard(img){
   STORY_T[pickStoryTemplate(!!img)].draw(x,W,H,D);
   return new Promise(res=>{ try{ c.toBlob(res,'image/png'); }catch(e){ res(null); } });
 }
+let storyBlob=null, storyImg=null, storyUrl=null;
 function shareStory(){
   if(!document.createElement('canvas').getContext){
     toast('Sharing is not supported in this browser'); return;
@@ -1508,26 +1524,44 @@ function shareStory(){
     inp.type='file'; inp.accept='image/*'; inp.id='sharePhotoInput';
     inp.style.display='none';
     document.body.appendChild(inp);
-    inp.addEventListener('change', async ()=>{
+    inp.addEventListener('change', ()=>{
       const f=inp.files&&inp.files[0]?inp.files[0]:null;
       inp.value='';
-      toast('Making your card…');
-      const img=await loadPhoto(f||null);
-      const blob=await renderStoryCard(img);
-      if(!blob){ toast('Could not create image'); return; }
-      const file=new File([blob],'train-hard.png',{type:'image/png'});
-      if(navigator.canShare && navigator.canShare({files:[file]})){
-        navigator.share({files:[file],title:'Train Hard',text:'Train Hard workout'}).catch(()=>{});
-      }else{
-        const aEl=document.createElement('a');
-        aEl.href=URL.createObjectURL(blob); aEl.download='train-hard.png';
-        document.body.appendChild(aEl); aEl.click(); aEl.remove();
-        setTimeout(()=>{ try{URL.revokeObjectURL(aEl.href)}catch(e){} },4000);
-        toast('Image saved — post it to your story');
-      }
+      openStoryPreview(f);
     });
   }
   try{ inp.click(); }catch(e){ toast('Could not open photo picker'); }
+}
+async function openStoryPreview(file){
+  toast('Making your card…');
+  storyImg=await loadPhoto(file||null);
+  storyBlob=await renderStoryCard(storyImg);
+  if(!storyBlob){ toast('Could not create image'); return; }
+  if(storyUrl){ try{URL.revokeObjectURL(storyUrl)}catch(e){} }
+  storyUrl=URL.createObjectURL(storyBlob);
+  const imgEl=$('#storyPreviewImg');
+  if(imgEl) imgEl.src=storyUrl;
+  $('#storyModal').classList.add('open');
+}
+function closeStoryPreview(){
+  $('#storyModal').classList.remove('open');
+}
+function downloadStory(){
+  if(!storyBlob) return;
+  const aEl=document.createElement('a');
+  aEl.href=URL.createObjectURL(storyBlob); aEl.download='train-hard.png';
+  document.body.appendChild(aEl); aEl.click(); aEl.remove();
+  setTimeout(()=>{ try{URL.revokeObjectURL(aEl.href)}catch(e){} },4000);
+  toast('Image saved — post it to your story');
+}
+async function rerollStory(){
+  toast('Making your card…');
+  storyBlob=await renderStoryCard(storyImg);
+  if(!storyBlob){ toast('Could not create image'); return; }
+  if(storyUrl){ try{URL.revokeObjectURL(storyUrl)}catch(e){} }
+  storyUrl=URL.createObjectURL(storyBlob);
+  const imgEl=$('#storyPreviewImg');
+  if(imgEl) imgEl.src=storyUrl;
 }
 
 
@@ -2574,6 +2608,16 @@ function init(){
   $('#addLift').onclick=()=>addLiftRow();
   $('#addCardio').onclick=()=>addCardioRow();
   $('#submitBtn').onclick=submitForm;
+  const ssb=$('#storyShareBtn'); if(ssb) ssb.onclick=async ()=>{
+    if(!storyBlob) return;
+    const file=new File([storyBlob],'train-hard.png',{type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file],title:'Train Hard',text:'Train Hard workout'}); }
+      catch(e){ if(e&&e.name!=='AbortError') downloadStory(); }
+    }else downloadStory();
+  };
+  const srb=$('#storyRerollBtn'); if(srb) srb.onclick=rerollStory;
+  const scb=$('#storyCloseBtn'); if(scb) scb.onclick=closeStoryPreview;
   $('#cancelEdit').onclick=cancelEdit;
   $('#wSave').onclick=saveWeight;
   $('#mSave').onclick=saveMeasurements;
