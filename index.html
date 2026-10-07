@@ -50,6 +50,9 @@
   .liftrow,.cardiorow{display:grid; gap:6px; background:var(--card2); border:1px solid var(--line);
     border-radius:12px; padding:10px; margin-top:8px;}
   .liftrow{grid-template-columns:1fr 54px 54px 64px 34px;}
+  .liftrow .lr-grouprow{grid-column:1/-1; display:flex; align-items:center; gap:8px;
+    font-size:12px; color:var(--muted);}
+  .liftrow .lr-grouprow select{flex:1; padding:6px 8px; font-size:13px;}
   .cardiorow{grid-template-columns:1fr 70px 70px 34px;}
   .liftrow .rm,.cardiorow .rm{background:none; border:none; color:var(--danger); font-size:18px; cursor:pointer;}
   .entry{border:1px solid var(--line); background:var(--card2); border-radius:12px; padding:10px 12px;
@@ -971,6 +974,16 @@ function exerciseOptions(sel){
   const lib=EXERCISES.map(e=>`<option value="${esc(e.n)}|${e.g}"${e.n===sel?' selected':''}>${esc(e.n)}</option>`).join('');
   return `<option value="">— pick —</option>${lib}<option value="custom">✏️ Custom…</option>`;
 }
+/** Muscle-group picker shown under a lift row only for custom exercises. */
+function customGroupRow(sel){
+  const w=document.createElement('div'); w.className='lr-grouprow';
+  const lab=document.createElement('span'); lab.textContent='Muscle group';
+  const s=document.createElement('select');
+  s.setAttribute('aria-label','Muscle group for custom exercise');
+  s.innerHTML=GROUPS.map(g=>`<option value="${g}"${g===sel?' selected':''}>${GROUP_LABEL[g]||g}</option>`).join('');
+  w.appendChild(lab); w.appendChild(s);
+  return w;
+}
 function addLiftRow(l){
   const wrap=$('#liftRows');
   const div=document.createElement('div'); div.className='liftrow';
@@ -981,21 +994,25 @@ function addLiftRow(l){
     <input class="lr-reps" type="number" min="0" step="1" placeholder="reps" value="${l?esc(l.reps):''}" inputmode="numeric">
     <input class="lr-wt" type="number" min="0" step="0.5" placeholder="lb" value="${l?esc(l.weight):''}" inputmode="decimal">
     <button type="button" class="rm" aria-label="Remove lift">×</button>`;
+  const nameSel=div.querySelector('.lr-name');
+  const showGroupPicker=(g)=>{ if(!div.querySelector('.lr-grouprow')) nameSel.insertAdjacentElement('afterend',customGroupRow(g)); };
+  const hideGroupPicker=()=>{ const p=div.querySelector('.lr-grouprow'); if(p) p.remove(); };
   if(l && l._custom){
-    const s=div.querySelector('.lr-name');
     const opt=document.createElement('option'); opt.value='customsel'; opt.textContent=l.name; opt.selected=true;
-    s.appendChild(opt);
-    s.dataset.customName=l.name;
+    nameSel.appendChild(opt);
+    nameSel.dataset.customName=l.name;
+    showGroupPicker(GROUPS.includes(l.group)?l.group:'core');
   }
   div.querySelector('.rm').onclick=()=>div.remove();
-  div.querySelector('.lr-name').onchange=(e)=>{
+  nameSel.onchange=(e)=>{
     if(e.target.value==='custom'){
       const n=prompt('Exercise name:','');
       if(n&&n.trim()){
         const opt=document.createElement('option'); opt.value='customsel'; opt.textContent=n.trim().slice(0,32); opt.selected=true;
         e.target.appendChild(opt); e.target.value='customsel'; e.target.dataset.customName=n.trim().slice(0,32);
+        showGroupPicker('core');
       } else e.target.value='';
-    } else { delete e.target.dataset.customName; }
+    } else { delete e.target.dataset.customName; hideGroupPicker(); }
   };
   wrap.appendChild(div);
   return div;
@@ -1015,7 +1032,11 @@ function addCardioRow(c){
 function readLiftRow(div){
   const s=div.querySelector('.lr-name');
   let name, group;
-  if(s.value==='customsel'){ name=s.dataset.customName||s.options[s.selectedIndex].text; group='core'; }
+  if(s.value==='customsel'){
+    name=s.dataset.customName||s.options[s.selectedIndex].text;
+    const gs=div.querySelector('.lr-grouprow select');
+    group=(gs&&GROUPS.includes(gs.value))?gs.value:'core';
+  }
   else if(s.value){ const [n,g]=s.value.split('|'); name=n; group=g; }
   else return null;
   const sets=parseInt(div.querySelector('.lr-sets').value,10)||0;
