@@ -60,6 +60,18 @@
   .lr-info{background:none; border:none; color:var(--muted); font-size:17px; line-height:1; cursor:pointer; padding:8px 4px; flex:none;}
   .lr-info.on{color:var(--rose);}
   .lr-cuepanel{grid-column:1/-1;}
+  .cardhead{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  .cardhead h2{margin:0;}
+  #tourHole{position:fixed; z-index:90; border:2px solid var(--rose); border-radius:14px;
+    box-shadow:0 0 0 9999px rgba(12,5,12,.74); pointer-events:none; transition:all .25s ease;}
+  #tourTip{position:fixed; z-index:91; background:var(--card2); border:1px solid var(--rose);
+    border-radius:14px; padding:14px 16px; width:min(330px, calc(100vw - 32px));
+    box-shadow:0 10px 34px rgba(0,0,0,.55);}
+  #tourTip h3{margin:0 0 6px; font-size:15px; color:var(--rose-light);}
+  #tourTip p{margin:0 0 12px; font-size:13.5px; line-height:1.55; color:var(--txt);}
+  #tourTip .trow{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  #tourProg{font-size:12px; color:var(--muted);}
+  #tourTip .tbtns{display:flex; gap:8px;}
   .cardiorow{grid-template-columns:1fr 70px 70px 34px;}
   .liftrow .rm,.cardiorow .rm{background:none; border:none; color:var(--danger); font-size:18px; cursor:pointer;}
   .entry{border:1px solid var(--line); background:var(--card2); border-radius:12px; padding:10px 12px;
@@ -290,7 +302,7 @@
   </div>
 
   <div class="card" id="logCard">
-    <h2 id="formTitle">💪 Log session</h2>
+    <div class="cardhead"><h2 id="formTitle">💪 Log session</h2><button type="button" class="btn ghost small" id="tourBtn">Take the tour</button></div>
     <form id="logForm" onsubmit="return false">
       <label class="fl" for="fDate">Date</label>
       <input type="date" id="fDate">
@@ -1223,7 +1235,8 @@ if (typeof process!=='undefined' && process.versions && process.versions.node){
     readinessFor, readinessAdjust, applyReadiness,
     heatmapData, longestStreak, muscleSets, balanceFlags,
     CHALLENGES, challengeStatus,
-    serializeBackup, sessionsToCSV, validateBackup
+    serializeBackup, sessionsToCSV, validateBackup,
+    nextTourIdx, tourRowPristine
   };
 }
 
@@ -2196,6 +2209,131 @@ function openSettings(){
 }
 
 /* ================= init ================= */
+/* Interactive walkthrough of the log form. Steps resolve their target at show
+   time; missing targets are skipped. Pure helpers are unit-tested. */
+function tourDefs(){
+  const row=()=>document.querySelector('#liftRows .liftrow');
+  const inRow=sel=>{ const r=row(); return r?r.querySelector(sel):null; };
+  return [
+    {get:()=>document.querySelector('#fDate'),
+     title:'Session date', body:'Your workout date. It defaults to today.'},
+    {get:()=>document.querySelector('#addLift'),
+     title:'Add lifts', body:'One row per exercise. Faster: tap "Load this workout" in the plan above and every row prefills.'},
+    {get:()=>inRow('.lr-namewrap'),
+     title:'Pick the exercise', body:'Choose from your library, or add a custom one with its own muscle group.'},
+    {get:()=>inRow('.lr-suggest:not([hidden])'),
+     title:'Smart suggestion', body:'Based on your last session for this lift. Tap Use and the weight and reps fill themselves in.'},
+    {get:()=>inRow('.lr-sets'),
+     title:'Log the set', body:'Sets, reps, then the weight you actually lifted. Left to right.'},
+    {get:()=>inRow('.lr-setdone'),
+     title:'Finish a set', body:'Tap ✓ after each set. Your rest timer starts by itself.'},
+    {get:()=>inRow('.lr-rpe'),
+     title:'How hard was it?', body:'Slide 1-10 for effort. Easy sessions earn you more weight next time.'},
+    {get:()=>inRow('.lr-info'),
+     title:'Form check', body:'Tap ⓘ any time for the cue, tempo, and demo video without leaving your session.'},
+    {get:()=>document.querySelector('#submitBtn'),
+     title:'Save the session', body:'PRs, badges, streaks, and challenges all update on their own.'},
+  ];
+}
+/** Pure: index of the first step at/after idx whose element exists. */
+function nextTourIdx(hasEl, idx){
+  let i=idx;
+  while(i<hasEl.length && !hasEl[i]) i++;
+  return i;
+}
+/** Pure: true when a lift row is untouched (safe for the tour to remove). */
+function tourRowPristine(vals){
+  return !vals.name && !vals.sets && !vals.reps && !vals.wt;
+}
+let tourIdx=-1;
+function tourRowVals(div){
+  const q=s=>div.querySelector(s);
+  const n=q('.lr-name');
+  return {name:n?n.value:'', sets:q('.lr-sets')?q('.lr-sets').value:'',
+          reps:q('.lr-reps')?q('.lr-reps').value:'', wt:q('.lr-wt')?q('.lr-wt').value:''};
+}
+function tourCleanupDemo(){
+  document.querySelectorAll('#liftRows .liftrow[data-tourdemo]').forEach(d=>{
+    if(tourRowPristine(tourRowVals(d))) d.remove(); else delete d.dataset.tourdemo;
+  });
+}
+function endTour(){
+  tourIdx=-1;
+  const hole=document.querySelector('#tourHole'), tip=document.querySelector('#tourTip');
+  if(hole) hole.remove(); if(tip) tip.remove();
+  window.removeEventListener('resize', tourReposition);
+  tourCleanupDemo();
+  store.data.settings.tourSeen=true; store.save();
+}
+function tourReposition(){
+  if(tourIdx<0) return;
+  const tip=document.querySelector('#tourTip'), hole=document.querySelector('#tourHole');
+  if(!tip||!hole||!tip._tourEl) return;
+  placeTourTip(tip, hole, tip._tourEl);
+}
+function placeTourTip(tip, hole, el){
+  const r=el.getBoundingClientRect(), pad=6;
+  hole.style.left=(r.left-pad)+'px'; hole.style.top=(r.top-pad)+'px';
+  hole.style.width=(r.width+pad*2)+'px'; hole.style.height=(r.height+pad*2)+'px';
+  tip.style.visibility='hidden'; tip.style.left='0px'; tip.style.top='0px';
+  const tw=tip.offsetWidth, th=tip.offsetHeight;
+  let left=Math.max(16, Math.min(window.innerWidth-tw-16, r.left+r.width/2-tw/2));
+  let top=r.bottom+14;
+  if(top+th>window.innerHeight-16) top=Math.max(16, r.top-th-14);
+  tip.style.left=left+'px'; tip.style.top=top+'px'; tip.style.visibility='';
+}
+function showTourStep(){
+  const defs=tourDefs(), hasEl=defs.map(d=>{ try{ return !!d.get(); }catch(e){ return false; } });
+  tourIdx=nextTourIdx(hasEl, tourIdx);
+  if(tourIdx>=defs.length){ endTour(); return; }
+  const def=defs[tourIdx], el=def.get();
+  el.scrollIntoView({block:'center'});
+  setTimeout(()=>{
+    if(tourIdx<0) return;
+    let hole=document.querySelector('#tourHole'), tip=document.querySelector('#tourTip');
+    if(!hole){ hole=document.createElement('div'); hole.id='tourHole'; document.body.appendChild(hole); }
+    if(!tip){
+      tip=document.createElement('div'); tip.id='tourTip'; document.body.appendChild(tip);
+      tip.innerHTML='<h3></h3><p></p><div class="trow"><span id="tourProg"></span><span class="tbtns">'+
+        '<button type="button" class="btn ghost small" id="tourBack">Back</button>'+
+        '<button type="button" class="btn small" id="tourNext">Next</button></span></div>'+
+        '<div style="margin-top:8px;text-align:right"><button type="button" id="tourSkip" '+
+        'style="background:none;border:none;color:var(--muted);font-size:12.5px;cursor:pointer">Skip tour</button></div>';
+      tip.querySelector('#tourBack').onclick=()=>{
+        const ds=tourDefs(), he=ds.map(d=>{ try{ return !!d.get(); }catch(e){ return false; } });
+        let i=tourIdx-2;
+        while(i>0 && !he[i]) i--;
+        tourIdx=Math.max(0,i); showTourStep();
+      };
+      tip.querySelector('#tourNext').onclick=()=>{ showTourStep(); };
+      tip.querySelector('#tourSkip').onclick=endTour;
+    }
+    tip._tourEl=el;
+    tip.querySelector('h3').textContent=def.title;
+    tip.querySelector('p').textContent=def.body;
+    tip.querySelector('#tourProg').textContent=(tourIdx+1)+' of '+defs.length;
+    tip.querySelector('#tourBack').style.visibility=tourIdx===0?'hidden':'';
+    tip.querySelector('#tourNext').textContent=tourIdx===defs.length-1?'Finish':'Next';
+    tourIdx++;
+    placeTourTip(tip, hole, el);
+  }, 320);
+}
+function startTour(){
+  if(tourIdx>=0) return;
+  endTourCleanupOnly();
+  if(!document.querySelector('#liftRows .liftrow')){
+    const d=addLiftRow(); d.dataset.tourdemo='1';
+  }
+  window.addEventListener('resize', tourReposition);
+  tourIdx=0; showTourStep();
+}
+/** Remove leftover tour DOM without touching settings (used when restarting). */
+function endTourCleanupOnly(){
+  const hole=document.querySelector('#tourHole'), tip=document.querySelector('#tourTip');
+  if(hole) hole.remove(); if(tip) tip.remove();
+  window.removeEventListener('resize', tourReposition);
+  tourIdx=-1;
+}
 function init(){
   store.load();
   $('#fDate').value=todayStr();
@@ -2247,7 +2385,9 @@ function init(){
     if(!confirm('Erase ALL training data? This cannot be undone.')) return;
     localStorage.removeItem(LS_KEY); store.load(); render(); toast('All data erased');
   };
+  $('#tourBtn').onclick=startTour;
   render();
+  if(!store.data.settings.tourSeen) setTimeout(startTour, 600);
 }
 if (typeof document!=='undefined' && document.addEventListener){
   document.addEventListener('DOMContentLoaded', init);
