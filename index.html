@@ -289,21 +289,25 @@
 
   <div class="card" id="planCard">
     <h2>📋 Workout plan</h2>
-    <div class="planrule">4-day upper/lower split · 40 min lift + 20 min cardio per session.<br>
-      🔥 <b>Warm-up:</b> 5 min easy cardio + 2 warm-up sets on the first lift.<br>
-      📈 <b>Progression:</b> when you hit the top of the rep range on all sets, add 2.5–5 lbs next session.</div>
-    <div id="planList"></div>
-  </div>
-
-  <div class="card" id="hikeCard">
-    <h2>🥾 Hiking mode · LeConte</h2>
-    <div class="planrule">24-week hiking plan for Mt. LeConte (April 2027). Gym days are 90-minute sessions. Tap a day to see the exercises. Mon/Wed load into the log form.</div>
-    <div class="hikeweek-head">
-      <button type="button" class="btn ghost small" id="hikePrev">← Prev</button>
-      <div class="hikeweek-label" id="hikeWeekLabel">Week 1 of 24</div>
-      <button type="button" class="btn ghost small" id="hikeNext">Next →</button>
+    <div class="phasetabs" style="margin-top:2px">
+      <button type="button" class="phasetab active" id="tabGym">🏋️ Gym</button>
+      <button type="button" class="phasetab" id="tabHike">🥾 Hiking</button>
     </div>
-    <div id="hikeWeek"></div>
+    <div id="gymPanel">
+      <div class="planrule">4-day upper/lower split · 40 min lift + 20 min cardio per session.<br>
+        🔥 <b>Warm-up:</b> 5 min easy cardio + 2 warm-up sets on the first lift.<br>
+        📈 <b>Progression:</b> when you hit the top of the rep range on all sets, add 2.5–5 lbs next session.</div>
+      <div id="planList"></div>
+    </div>
+    <div id="hikePanel" style="display:none">
+      <div class="planrule">🥾 <b>Hiking mode · LeConte.</b> 24-week hiking plan for Mt. LeConte (April 2027). Gym days are 90-minute sessions. Tap a day to see the exercises. Mon/Wed load into the log form.</div>
+      <div class="hikeweek-head">
+        <button type="button" class="btn ghost small" id="hikePrev">← Prev</button>
+        <div class="hikeweek-label" id="hikeWeekLabel">Week 1 of 24</div>
+        <button type="button" class="btn ghost small" id="hikeNext">Next →</button>
+      </div>
+      <div id="hikeWeek"></div>
+    </div>
   </div>
 
   <div class="card" id="timerCard">
@@ -1982,7 +1986,7 @@ if (typeof process!=='undefined' && process.versions && process.versions.node){
     sessionReps, todayBests,
     storyData, storyChecks, pickStoryTemplate, STORY_HEADS, STORY_T,
     THEME_VARS, APP_THEMES, appThemeName,
-    HIKE_ROWS, HIKE_START, HIKE_BACK_TO_BACK, hikePhase, hikeWeekFor, hikeDayPlan, weekOfHikeDays
+    HIKE_ROWS, HIKE_START, HIKE_BACK_TO_BACK, hikePhase, hikeWeekFor, hikeDayPlan, weekOfHikeDays, setPlanTab, planTabNow
   };
 }
 
@@ -2014,6 +2018,17 @@ function confetti(){
 let editingId=null;
 let loadedPlanDay=null; // plan day index pre-filled into the form via "Load this workout"
 let hikeViewWeek=null; // hiking-mode week being viewed (UI state only, never persisted)
+let planTab='gym'; // which tab the Workout plan card shows: 'gym' | 'hike' (UI state only)
+function setPlanTab(t){
+  planTab = (t==='hike') ? 'hike' : 'gym';
+  const g=$('#gymPanel'), h=$('#hikePanel'), tg=$('#tabGym'), th=$('#tabHike');
+  if(g&&g.style) g.style.display = planTab==='gym' ? '' : 'none';
+  if(h&&h.style) h.style.display = planTab==='hike' ? '' : 'none';
+  if(tg&&tg.classList&&tg.classList.toggle) tg.classList.toggle('active', planTab==='gym');
+  if(th&&th.classList&&th.classList.toggle) th.classList.toggle('active', planTab==='hike');
+  if(planTab==='hike') renderHike();
+}
+function planTabNow(){ return planTab; }
 let planInfoOpen=null; // "di:li" key of the expanded exercise cue panel in the plan (accordion)
 const DISPLAY_OPTS=[['coach','Coach card'],['readiness','Readiness check-in'],['plan','Workout plan'],['timer','60-min timer'],['log','Log session form'],
   ['volume','Volume card'],['strength','Strength levels'],['prs','Personal records'],['progress','Progress (heatmap)'],['challenges','Challenges & badges'],
@@ -3019,6 +3034,8 @@ function init(){
   addLiftRow();
   $('#addLift').onclick=()=>addLiftRow();
   $('#addCardio').onclick=()=>addCardioRow();
+  const tg=$('#tabGym'); if(tg) tg.onclick=()=>setPlanTab('gym');
+  const th=$('#tabHike'); if(th) th.onclick=()=>setPlanTab('hike');
   const hp=$('#hikePrev'); if(hp) hp.onclick=()=>{ hikeViewWeek=Math.max(1,(hikeViewWeek||hikeWeekFor(new Date()).week)-1); renderHike(); };
   const hn=$('#hikeNext'); if(hn) hn.onclick=()=>{ hikeViewWeek=Math.min(24,(hikeViewWeek||hikeWeekFor(new Date()).week)+1); renderHike(); };
   $('#submitBtn').onclick=submitForm;
